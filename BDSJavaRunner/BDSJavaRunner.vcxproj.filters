@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="javas">
+      <UniqueIdentifier>{3294d8e0-878d-423a-9c7c-730905dcd088}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tick">
+      <UniqueIdentifier>{d1417538-fcc2-484d-aceb-1dfcd60ea9f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="GUI">
+      <UniqueIdentifier>{75f36c79-5a31-4c03-8791-82d6058fe860}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="scoreboard">
+      <UniqueIdentifier>{12be390c-7217-4ff0-be2a-4cc8a6e9311c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="commands">
+      <UniqueIdentifier>{89a8d8cc-c77b-4934-b62a-00a6c82ad031}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="符号工具">
+      <UniqueIdentifier>{9a2983ec-d857-4343-846d-ecc2c6e45a6f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="THook.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="mod.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="javas\BDS_MCJAVAAPI.h">
+      <Filter>javas</Filter>
+    </ClInclude>
+    <ClInclude Include="Events.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="RVAs.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BDS.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Component.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="tick\tick.h">
+      <Filter>tick</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\SimpleForm.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="scoreboard\scoreboard.hpp">
+      <Filter>scoreboard</Filter>
+    </ClInclude>
+    <ClInclude Include="commands\commands.h">
+      <Filter>commands</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="mod.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="tick\tick.cpp">
+      <Filter>tick</Filter>
+    </ClCompile>
+    <ClCompile Include="GUI\SimpleForm.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="scoreboard\scoreboard.cpp">
+      <Filter>scoreboard</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MCBDS插件开发助手.zip">
+      <Filter>符号工具</Filter>
+    </None>
+  </ItemGroup>
+</Project>
