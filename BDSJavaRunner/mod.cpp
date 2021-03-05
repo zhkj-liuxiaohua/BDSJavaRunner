@@ -102,20 +102,21 @@ static bool checkException(JNIEnv* env) {
 }
 
 // 执行回调
-static bool runJavacode(std::string key, ActMode mode, std::string& eventData) {
+static bool runJavacode(std::string key, ActMode mode, Json::Value& eventData) {
 	auto& funcs = (mode == ActMode::BEFORE) ? beforecallbacks :
 		aftercallbacks;
 	auto dv = funcs[key];
 	bool ret = true;
 	if (dv) {
 		if (dv->size() > 0) {
+			auto sdata = eventData.toStyledString();
 			for (auto& func : *dv) {
 				try {
-					JNIEnv* ev;
+					JNIEnv* ev = NULL;
 					func.first->AttachCurrentThread((void**)&ev, NULL);
 					auto cls = ev->GetObjectClass(func.second);
 					auto mid = ev->GetMethodID(cls, "callback", "(Ljava/lang/String;)Z");
-					auto jdata = ev->NewStringUTF(eventData.c_str());
+					auto jdata = ev->NewStringUTF(sdata.c_str());
 					ret = ret && ev->CallBooleanMethod(func.second, mid, jdata);
 					checkException(ev);
 					ev->DeleteLocalRef(jdata);
@@ -235,7 +236,7 @@ JNIEXPORT void JNICALL Java_BDS_MCJAVAAPI_postTick
 	ev->GetJavaVM(&jvm);
 	auto gcb = ev->NewGlobalRef(cb);
 	auto f = [jvm, gcb]() {
-		JNIEnv* cev;
+		JNIEnv* cev = NULL;
 		jvm->AttachCurrentThread((void**)&cev, NULL);
 		auto cls = cev->GetObjectClass(gcb);
 		auto mid = cev->GetMethodID(cls, "callback", "()V");
@@ -261,7 +262,7 @@ static std::unordered_map<std::string, std::unique_ptr<CmdDescriptionFlags>> cmd
 // 参数详解：cmd - 命令，description - 命令说明，level - 执行要求等级，flag1 - 命令类型1， flag2 - 命令类型2
 // 备注：延期注册的情况，可能不会改变客户端界面
 static void setCommandDescribeEx(std::string cmd, std::string description, char level, char flag1, char flag2) {
-	auto strcmd = cmd;
+	auto &strcmd = cmd;
 	if (strcmd.length()) {
 		auto flgs = std::make_unique<CmdDescriptionFlags>();
 		flgs->description = description;
@@ -271,7 +272,7 @@ static void setCommandDescribeEx(std::string cmd, std::string description, char 
 		cmddescripts[strcmd] = std::move(flgs);
 		if (regHandle) {
 			std::string c = strcmd;
-			auto ct = description;
+			auto &ct = description;
 			SYMCALL(VA, MSSYM_MD5_8574de98358ff66b5a913417f44dd706,		// CommandRegistry::registerCommand
 				regHandle, &c, ct.c_str(), level, flag1, flag2);
 		}
@@ -344,7 +345,7 @@ JNIEXPORT void JNICALL Java_BDS_MCJAVAAPI_JSErunScript
 			bool ret = SYMCALL(bool, MSSYM_MD5_23dc46771eb6a97b3d65e0e79a6fed42,	// ScriptApi::ScriptFramework::runScript
 				p_jsen, name, uc);
 			if (callb) {
-				JNIEnv* cev;
+				JNIEnv* cev = NULL;
 				jvm->AttachCurrentThread((void**)&cev, NULL);
 				auto cls = cev->GetObjectClass(callb);
 				auto mid = cev->GetMethodID(cls, "callback", "(Z)V");
@@ -401,7 +402,7 @@ JNIEXPORT void JNICALL Java_BDS_MCJAVAAPI_JSEfireCustomEvent
 			bool ret = SYMCALL(bool, MSSYM_B1QA9fireEventB3AQDE23ScriptEngineWithContextB1AE20VScriptServerContextB4AAAAA4QEAAB1UE20NAEBUScriptEventDataB3AAAA1Z,
 				p_jsen, &edata);
 			if (callb) {
-				JNIEnv* cev;
+				JNIEnv* cev = NULL;
 				jvm->AttachCurrentThread((void**)&cev, NULL);
 				auto cls = cev->GetObjectClass(callb);
 				auto mid = cev->GetMethodID(cls, "callback", "(Z)V");
@@ -759,7 +760,7 @@ JNIEXPORT jint JNICALL Java_BDS_MCJAVAAPI_getscoreById
 		testobj = scoreboard->addObjective(objname, objname);
 		return 0;
 	}
-	__int64 a2[2];
+	__int64 a2[2]{0};
 	__int64 sid[2]{ 0 };
 	sid[0] = id;
 	if (findScoreboardId(id, sid)) {
@@ -828,7 +829,7 @@ static bool checkIsPlayer(void* p) {
 // 回传伤害源信息
 static void getDamageInfo(void* p, void* dsrc, Json::Value& ue) {			// IDA Mob::die
 	char v72;
-	VA  v2[2];
+	VA  v2[2]{0};
 	v2[0] = (VA)p;
 	v2[1] = (VA)dsrc;
 	auto v7 = ((Mob*)p)->getLevel();
@@ -957,13 +958,12 @@ static bool _JA_ONSERVERCMD(VA _this, std::string* cmd) {
 	Json::Value se;
 	initBaseEventData(se, EventType::onServerCmd, ActMode::BEFORE, false);
 	se["cmd"] = *cmd;
-	auto e = se.toStyledString();
+	auto& e = se;
 	bool ret = runJavacode(ActEvent.ONSERVERCMD, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(VA, std::string*)) * getOriginalData(_JA_ONSERVERCMD);
 		ret = original(_this, cmd);
 		changeBaseEventData(se, ActMode::AFTER, ret);
-		e = se.toStyledString();
 		runJavacode(ActEvent.ONSERVERCMD, ActMode::AFTER, e);
 	}
 	return ret;
@@ -979,12 +979,11 @@ static VA _JA_ONSERVERCMDOUTPUT(VA handle, char* str, VA size) {
 		Json::Value soe;
 		initBaseEventData(soe, EventType::onServerCmdOutput, ActMode::BEFORE, false);
 		soe["output"] = str;
-		auto e = soe.toStyledString();
+		auto& e = soe;
 		bool ret = runJavacode(ActEvent.ONSERVERCMDOUTPUT, ActMode::BEFORE, e);
 		if (ret) {
 			VA result = original(handle, str, size);
 			changeBaseEventData(soe, ActMode::AFTER, ret);
-			e = soe.toStyledString();
 			runJavacode(ActEvent.ONSERVERCMDOUTPUT, ActMode::AFTER, e);
 			return result;
 		}
@@ -1010,12 +1009,11 @@ static void _JA_ONFORMSELECT(VA _this, VA id, VA handle, ModalFormResponsePacket
 			fse["uuid"] = p->getUuid()->toString();
 			fse["selected"] = fmp->getSelectStr();			// 特别鸣谢：sysca11
 			fse["formid"] = fid;
-			auto e = fse.toStyledString();
+			auto &e = fse;
 			bool ret = runJavacode(ActEvent.ONFORMSELECT, ActMode::BEFORE, e);
 			if (ret) {
 				original(_this, id, handle, fp);
 				changeBaseEventData(fse, ActMode::AFTER, ret);
-				e = fse.toStyledString();
 				runJavacode(ActEvent.ONFORMSELECT, ActMode::AFTER, e);
 			}
 			return;
@@ -1040,13 +1038,12 @@ static bool _JA_ONUSEITEM(void* _this, ItemStack* item, BlockPos* pBlkpos, unsig
 		ue["blockname"] = pBlk->getLegacyBlock()->getFullName();
 		ue["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	}
-	std::string e = ue.toStyledString();
+	auto& e = ue;
 	bool ret = runJavacode(ActEvent.ONUSEITEM, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, ItemStack*, BlockPos*, unsigned __int8, void*, Block*)) * getOriginalData(_JA_ONUSEITEM);
 		ret = original(_this, item, pBlkpos, a4, v5, pBlk);
 		changeBaseEventData(ue, ActMode::AFTER, ret);
-		e = ue.toStyledString();
 		runJavacode(ActEvent.ONUSEITEM, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1067,12 +1064,11 @@ static bool _JA_ONPLACEDBLOCK(BlockSource* _this, Block* pBlk, BlockPos* pBlkpos
 		pe["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 		pe["blockname"] = pBlk->getLegacyBlock()->getFullName();
 		pe["position"] = pBlkpos->getPosition()->toJson();
-		std::string e = pe.toStyledString();
+		auto& e = pe;
 		bool ret = runJavacode(ActEvent.ONPLACEDBLOCK, ActMode::BEFORE, e);
 		if (ret) {
 			ret = original(_this, pBlk, pBlkpos, a4, pPlayer, _bool);
 			changeBaseEventData(pe, ActMode::AFTER, ret);
-			e = pe.toStyledString();
 			runJavacode(ActEvent.ONPLACEDBLOCK, ActMode::AFTER, e);
 		}
 		return ret;
@@ -1093,13 +1089,12 @@ static bool _JA_ONDESTROYBLOCK(void* _this, BlockPos* pBlkpos) {
 	de["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 	de["position"] = pBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONDESTROYBLOCK, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, BlockPos*)) * getOriginalData(_JA_ONDESTROYBLOCK);
 		ret = original(_this, pBlkpos);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONDESTROYBLOCK, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1117,13 +1112,12 @@ static bool _JA_ONCHESTBLOCKUSE(void* _this, Player* pPlayer, BlockPos* pBlkpos)
 	de["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 	de["position"] = pBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONSTARTOPENCHEST, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, Player*, BlockPos*)) * getOriginalData(_JA_ONCHESTBLOCKUSE);
 		ret = original(_this, pPlayer, pBlkpos);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONSTARTOPENCHEST, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1141,13 +1135,12 @@ static bool _JA_ONBARRELBLOCKUSE(void* _this, Player* pPlayer, BlockPos* pBlkpos
 	de["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 	de["position"] = pBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONSTARTOPENBARREL, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, Player*, BlockPos*)) * getOriginalData(_JA_ONBARRELBLOCKUSE);
 		ret = original(_this, pPlayer, pBlkpos);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		std::string e = de.toStyledString();
 		runJavacode(ActEvent.ONSTARTOPENBARREL, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1167,13 +1160,12 @@ static void _JA_ONSTOPOPENCHEST(void* _this, Player* pPlayer) {
 	de["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 	de["position"] = pBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONSTOPOPENCHEST, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(void*, Player*)) * getOriginalData(_JA_ONSTOPOPENCHEST);
 		original(_this, pPlayer);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONSTOPOPENCHEST, ActMode::AFTER, e);
 	}
 }
@@ -1192,13 +1184,12 @@ static void _JA_STOPOPENBARREL(void* _this, Player* pPlayer) {
 	de["blockid"] = pBlk->getLegacyBlock()->getBlockItemID();
 	de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 	de["position"] = pBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONSTOPOPENBARREL, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(void*, Player*)) * getOriginalData(_JA_STOPOPENBARREL);
 		original(_this, pPlayer);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONSTOPOPENBARREL, ActMode::AFTER, e);
 	}
 }
@@ -1234,12 +1225,11 @@ static void _JA_ONSETSLOT(LevelContainerModel* a1, VA a2) {
 			de["blockid"] = id;
 			de["blockname"] = pBlk->getLegacyBlock()->getFullName();
 			de["slot"] = slot;
-			std::string e = de.toStyledString();
+			auto& e = de;
 			bool ret = runJavacode(ActEvent.ONSETSLOT, ActMode::BEFORE, e);
 			if (ret) {
 				original(a1, a2);
 				changeBaseEventData(de, ActMode::AFTER, ret);
-				e = de.toStyledString();
 				runJavacode(ActEvent.ONSETSLOT, ActMode::AFTER, e);
 			}
 		}
@@ -1257,7 +1247,7 @@ static bool _JA_ONCHANGEDIMENSION(void* _this, Player* pPlayer, void* req) {
 	Json::Value de;
 	initBaseEventData(de, EventType::onChangeDimension, ActMode::BEFORE, false);
 	addPlayerInfo(de, pPlayer);
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONCHANGEDIMENSION, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, Player*, void*)) * getOriginalData(_JA_ONCHANGEDIMENSION);
@@ -1267,7 +1257,6 @@ static bool _JA_ONCHANGEDIMENSION(void* _this, Player* pPlayer, void* req) {
 			// 此处刷新玩家信息
 			addPlayerInfo(de, pPlayer);
 		}
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONCHANGEDIMENSION, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1281,13 +1270,12 @@ static void _JA_ONMOBDIE(Mob* _this, void* dmsg) {
 	initBaseEventData(de, EventType::onMobDie, ActMode::BEFORE, false);
 	getDamageInfo(_this, dmsg, de);
 	de["mobPtr"] = (VA)_this;
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONMOBDIE, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(Mob*, void*)) * getOriginalData(_JA_ONMOBDIE);
 		original(_this, dmsg);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONMOBDIE, ActMode::AFTER, e);
 	}
 }
@@ -1298,14 +1286,13 @@ static void _JA_PLAYERRESPAWN(Player* pPlayer) {
 	Json::Value de;
 	initBaseEventData(de, EventType::onRespawn, ActMode::BEFORE, false);
 	addPlayerInfo(de, pPlayer);
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONRESPAWN, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(Player*)) * getOriginalData(_JA_PLAYERRESPAWN);
 		original(pPlayer);
 		changeBaseEventData(de, ActMode::AFTER, ret);
 		addPlayerInfo(de, pPlayer);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONRESPAWN, ActMode::AFTER, e);
 	}
 }
@@ -1319,13 +1306,12 @@ static void _JA_ONCHAT(void* _this, std::string& player_name, std::string& targe
 	de["target"] = target;
 	de["msg"] = msg;
 	de["chatstyle"] = chat_style;
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONCHAT, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(void*, std::string&, std::string&, std::string&, std::string&)) * getOriginalData(_JA_ONCHAT);
 		original(_this, player_name, target, msg, chat_style);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONCHAT, ActMode::AFTER, e);
 	}
 }
@@ -1342,13 +1328,12 @@ static void _JA_ONINPUTTEXT(VA _this, VA id, TextPacket* tp) {
 		addPlayerInfo(de, p);
 	}
 	de["msg"] = tp->toString();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONINPUTTEXT, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(VA, VA, TextPacket*)) * getOriginalData(_JA_ONINPUTTEXT);
 		original(_this, id, tp);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONINPUTTEXT, ActMode::AFTER, e);
 	}
 }
@@ -1372,12 +1357,11 @@ static VA _JA_ONINPUTCOMMAND(VA _this, VA mret, std::shared_ptr<CommandContext> 
 		addPlayerInfo(de, p);
 		de["cmd"] = x->getCmd();
 		VA mcmd = 0;
-		std::string e = de.toStyledString();
+		auto& e = de;
 		bool ret = runJavacode(ActEvent.ONINPUTCOMMAND, ActMode::BEFORE, e);
 		if (ret) {
 			mcmd = original(_this, mret, x, a4);
 			changeBaseEventData(de, ActMode::AFTER, ret);
-			e = de.toStyledString();
 			runJavacode(ActEvent.ONINPUTCOMMAND, ActMode::AFTER, e);
 		}
 		return mcmd;
@@ -1401,11 +1385,10 @@ THook2(_JA_ONCREATEPLAYER, VA,
 	//autoByteCpy(&le.ability, getAbilities(pPlayer).toStyledString().c_str());
 	onlinePlayers[uuid] = pPlayer;
 	playerSign[pPlayer] = true;
-	std::string e = le.toStyledString();
+	auto& e = le;
 	bool ret = runJavacode(ActEvent.ONLOADNAME, ActMode::BEFORE, e);
 	if (ret) {
 		changeBaseEventData(le, ActMode::AFTER, ret);
-		e = le.toStyledString();
 		runJavacode(ActEvent.ONLOADNAME, ActMode::AFTER, e);
 	}
 	return hret;
@@ -1422,7 +1405,7 @@ THook2(_JA_ONPLAYERLEFT, void,
 	le["uuid"] = uuid;
 	le["xuid"] = pPlayer->getXuid(p_level);
 	//autoByteCpy(&le.ability, getAbilities(pPlayer).toStyledString().c_str());
-	std::string e = le.toStyledString();
+	auto& e = le;
 	bool ret = runJavacode(ActEvent.ONPLAYERLEFT, ActMode::BEFORE, e);
 	playerSign[pPlayer] = false;
 	playerSign.erase(pPlayer);
@@ -1431,7 +1414,6 @@ THook2(_JA_ONPLAYERLEFT, void,
 	if (ret) {
 		original(_this, pPlayer, v3);
 		changeBaseEventData(le, ActMode::AFTER, ret);
-		e = le.toStyledString();
 		runJavacode(ActEvent.ONPLAYERLEFT, ActMode::AFTER, e);
 	}
 }
@@ -1469,12 +1451,11 @@ static VA _JA_ONMOVE(void* _this, Player* pPlayer, char v3, int v4, int v5) {
 	Json::Value de;
 	initBaseEventData(de, EventType::onMove, ActMode::BEFORE, false);
 	addPlayerInfo(de, pPlayer);
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONMOVE, ActMode::BEFORE, e);
 	if (ret) {
 		reto = original(_this, pPlayer, v3, v4, v5);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONMOVE, ActMode::AFTER, e);
 	}
 	return reto;
@@ -1491,13 +1472,12 @@ static bool _JA_ONATTACK(Player* pPlayer, Actor* pa) {
 	de["actorpos"] = pa->getPos()->toJson();
 	de["actorname"] = pa->getNameTag();
 	de["actortype"] = pa->getEntityTypeName();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONATTACK, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(Player*, Actor*)) * getOriginalData(_JA_ONATTACK);
 		ret = original(pPlayer, pa);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONATTACK, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1521,13 +1501,12 @@ static void _JA_ONLEVELEXPLODE(VA _this, BlockSource* a2, Actor* a3, Vec3* a4, f
 		de["dimension"] = toDimenStr(i);
 	}
 	de["explodepower"] = a5;
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONLEVELEXPLODE, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(VA, BlockSource*, Actor*, Vec3*, float, bool, bool, float, bool)) * getOriginalData(_JA_ONLEVELEXPLODE);
 		original(_this, a2, a3, a4, a5, a6, a7, a8, a9);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONLEVELEXPLODE, ActMode::AFTER, e);
 	}
 }
@@ -1556,12 +1535,11 @@ static bool _JA_SETRESPWNEXPLOREDE(Player* pPlayer, BlockPos* a2, BlockSource* a
 					de["dimension"] = toDimenStr(did);
 					de["position"] = a2->getPosition()->toJson();
 					de["explodepower"] = pw;
-					std::string e = de.toStyledString();
+					auto& e = de;
 					bool ret = runJavacode(ActEvent.ONLEVELEXPLODE, ActMode::BEFORE, e);
 					if (ret) {
 						ret = original(pPlayer, a2, a3, a4);
 						changeBaseEventData(de, ActMode::AFTER, ret);
-						e = de.toStyledString();
 						runJavacode(ActEvent.ONLEVELEXPLODE, ActMode::AFTER, e);
 					}
 					return ret;
@@ -1595,12 +1573,11 @@ static VA _JA_ONSETARMOR(Player* p, int slot, ItemStack* i) {
 		de["itemaux"] = naux;
 		de["slot"] = slot;
 		de["slottype"] = 0;
-		std::string e = de.toStyledString();
+		auto& e = de;
 		bool ret = runJavacode(ActEvent.ONEQUIPPEDARMOR, ActMode::BEFORE, e);
 		if (ret) {
 			VA ret = original(p, slot, i);
 			changeBaseEventData(de, ActMode::AFTER, ret);
-			e = de.toStyledString();
 			runJavacode(ActEvent.ONEQUIPPEDARMOR, ActMode::AFTER, e);
 			return ret;
 		}
@@ -1627,12 +1604,11 @@ static VA _JA_ONSETCARRIEDITEM(VA v1, Player* p, ItemStack* v3, ItemStack* i, in
 		de["itemaux"] = naux;
 		de["slot"] = slot;
 		de["slottype"] = 1;
-		std::string e = de.toStyledString();
+		auto& e = de;
 		bool ret = runJavacode(ActEvent.ONEQUIPPEDARMOR, ActMode::BEFORE, e);
 		if (ret) {
 			VA ret = original(v1, p, v3, i, slot);
 			changeBaseEventData(de, ActMode::AFTER, ret);
-			e = de.toStyledString();
 			runJavacode(ActEvent.ONEQUIPPEDARMOR, ActMode::AFTER, e);
 			return ret;
 		}
@@ -1651,13 +1627,12 @@ static void _JA_ONLEVELUP(Player* pl, int a1) {
 	initBaseEventData(le, EventType::onLevelUp, ActMode::BEFORE, false);
 	addPlayerInfo(le, pl);
 	le["lv"] = a1;
-	std::string e = le.toStyledString();
+	auto& e = le;
 	bool ret = runJavacode(ActEvent.ONLEVELUP, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(Player*, int)) * getOriginalData(_JA_ONLEVELUP);
 		original(pl, a1);
 		changeBaseEventData(le, ActMode::AFTER, ret);
-		e = le.toStyledString();
 		runJavacode(ActEvent.ONLEVELUP, ActMode::AFTER, e);
 	}
 }
@@ -1682,13 +1657,12 @@ static bool _JA_ONPISTONPUSH(BlockActor* _this, BlockSource* a2, BlockPos* a3, U
 	de["targetblockname"] = ptBlk->getLegacyBlock()->getFullName();
 	de["targetposition"] = a3->toJson();
 	de["direction"] = a5;
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONPISTONPUSH, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(void*, BlockSource*, BlockPos*, UINT8, UINT8)) * getOriginalData(_JA_ONPISTONPUSH);
 		ret = original(_this, a2, a3, a4, a5);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONPISTONPUSH, ActMode::AFTER, e);
 		return ret;
 	}
@@ -1726,13 +1700,12 @@ static bool _JA_ONCHESTPAIR(BlockActor* a1, BlockActor* a2, bool a3) {
 	de["targetblockid"] = ptBlk->getLegacyBlock()->getBlockItemID();
 	de["targetblockname"] = ptBlk->getLegacyBlock()->getFullName();
 	de["targetposition"] = ptBlkpos->getPosition()->toJson();
-	std::string e = de.toStyledString();
+	auto& e = de;
 	bool ret = runJavacode(ActEvent.ONCHESTPAIR, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(BlockActor*, BlockActor*, bool)) * getOriginalData(_JA_ONCHESTPAIR);
 		ret = original(a1, a2, a3);
 		changeBaseEventData(de, ActMode::AFTER, ret);
-		e = de.toStyledString();
 		runJavacode(ActEvent.ONCHESTPAIR, ActMode::AFTER, e);
 		return ret;
 	}
@@ -1755,12 +1728,11 @@ static bool _JA_ONMOBSPAWNCHECK(Mob* a1, VA a2) {
 	me["mobname"] = a1->getNameTag();
 	me["mobtype"] = a1->getEntityTypeName();
 	me["XYZ"] = a1->getPos()->toJson();
-	std::string e = me.toStyledString();
+	auto& e = me;
 	bool ret = runJavacode(ActEvent.ONMOBSPAWNCHECK, ActMode::BEFORE, e);
 	if (ret) {
 		ret = original(a1, a2);
 		changeBaseEventData(me, ActMode::AFTER, ret);
-		e = me.toStyledString();
 		runJavacode(ActEvent.ONMOBSPAWNCHECK, ActMode::AFTER, e);
 		return ret;
 	}
@@ -1777,13 +1749,12 @@ static bool _JA_ONDROPITEM(Player* pPlayer, ItemStack* itemStack, bool a3) {
 	pe["itemid"] = itemStack->getId();
 	pe["itemname"] = itemStack->getName();
 	pe["itemaux"] = itemStack->getAuxValue();
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONDROPITEM, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(Player*, ItemStack*, bool)) * getOriginalData(_JA_ONDROPITEM);
 		ret = original(pPlayer, itemStack, a3);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONDROPITEM, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1800,13 +1771,12 @@ static bool _JA_ONPICKUPITEM(Player* pPlayer, ItemActor* itemactor, int a3, unsi
 	pe["itemid"] = itemStack->getId();
 	pe["itemname"] = itemStack->getName();
 	pe["itemaux"] = itemStack->getAuxValue();
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONPICKUPITEM, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(Player*, ItemActor*, int, unsigned int)) * getOriginalData(_JA_ONPICKUPITEM);
 		original(pPlayer, itemactor, a3, a4);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONPICKUPITEM, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1823,13 +1793,12 @@ static void _JA_ONSCORECHANGED(Scoreboard* class_this, ScoreboardId* a2, Objecti
 	pe["scoreboardid"] = a2->getId();
 	VA sc[2]{ 0 };
 	pe["score"] = a3->getscoreinfo((ScoreInfo*)sc, a2)->getcount();
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONSCORECHANGED, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (void(*)(Scoreboard*, ScoreboardId*, Objective*)) * getOriginalData(_JA_ONSCORECHANGED);
 		original(class_this, a2, a3);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONSCORECHANGED, ActMode::AFTER, e);
 	}
 }
@@ -1841,13 +1810,12 @@ static bool _JA_ONSCRIPTENGINEINIT(VA jse) {
 	Json::Value pe;
 	initBaseEventData(pe, EventType::onScriptEngineInit, ActMode::BEFORE, false);
 	pe["jsePtr"] = jse;
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONSCRIPTENGINEINIT, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(VA)) * getOriginalData(_JA_ONSCRIPTENGINEINIT);
 		ret = original(jse);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONSCRIPTENGINEINIT, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1861,13 +1829,12 @@ static bool _JA_ONSCRIPTENGINELOG(VA jse, std::string* log) {
 	initBaseEventData(pe, EventType::onScriptEngineLog, ActMode::BEFORE, false);
 	pe["jsePtr"] = jse;
 	pe["log"] = *log;
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONSCRIPTENGINELOG, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(VA)) * getOriginalData(_JA_ONSCRIPTENGINELOG);
 		ret = original(jse);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONSCRIPTENGINELOG, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1882,13 +1849,12 @@ static bool _JA_ONSCRIPTENGINECMD(VA a1, VA jscmd) {
 	initBaseEventData(pe, EventType::onScriptEngineCmd, ActMode::BEFORE, false);
 	pe["jsePtr"] = p_jsen;
 	pe["cmd"] = *cmd;
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONSCRIPTENGINECMD, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (bool(*)(VA, VA)) * getOriginalData(_JA_ONSCRIPTENGINECMD);
 		ret = original(a1, jscmd);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONSCRIPTENGINECMD, ActMode::AFTER, e);
 	}
 	return ret;
@@ -1901,13 +1867,12 @@ static VA _JA_ONSCOREBOARDINIT(VA a1, VA a2, VA a3) {
 	Json::Value pe;
 	initBaseEventData(pe, EventType::onScoreboardInit, ActMode::BEFORE, false);
 	pe["scPtr"] = a1;
-	std::string e = pe.toStyledString();
+	auto& e = pe;
 	bool ret = runJavacode(ActEvent.ONSCOREBOARDINIT, ActMode::BEFORE, e);
 	if (ret) {
 		auto original = (VA(*)(VA, VA, VA)) * getOriginalData(_JA_ONSCOREBOARDINIT);
 		VA r = original(a1, a2, a3);
 		changeBaseEventData(pe, ActMode::AFTER, ret);
-		e = pe.toStyledString();
 		runJavacode(ActEvent.ONSCOREBOARDINIT, ActMode::AFTER, e);
 		return r;
 	}
@@ -2030,7 +1995,7 @@ static JavaVM* jvm;
 
 static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 	JavaVMOption options[1];
-	JNIEnv* env;
+	JNIEnv* env = NULL;
 	JavaVMInitArgs vm_args;
 	long status;
 	jclass cls;
@@ -2046,20 +2011,21 @@ static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 	}
 	jarpath = jarpath + jars;
 	int iSize = WideCharToMultiByte(CP_ACP, 0, jarpath.c_str(), -1, NULL, 0, NULL, NULL);
-	char cjarpath[256]{ 0 };
+	char *cjarpath = new char[(size_t)(iSize) * 3 + 1];
 	WideCharToMultiByte(CP_ACP, 0, jarpath.c_str(), -1, cjarpath, iSize, NULL, NULL);
-	options[0].optionString = (char*)cjarpath;
+	options[0].optionString = cjarpath;
 	vm_args.version = JNI_VERSION_1_8;
 	vm_args.nOptions = 1;
 	vm_args.options = options;
 	auto CreateJavaVM = (jint(JNICALL*)(JavaVM**, void**, void*))pCreateJavaVM;
 	status = CreateJavaVM(&jvm, (void**)&env, &vm_args);
+	delete [] cjarpath;
 	if (status != JNI_ERR)
 	{
 		for (auto& jarName : paths) {
 			jvm->AttachCurrentThread((void**)&env, NULL);
 			// 此处利用JarFile类查找jar包中的manifest属性
-			std::string mainclasspath = "BDS/Plugin";
+			std::string mainclasspath = "";
 			cls = env->FindClass("java/util/jar/JarFile");
 			if (cls != 0) {
 				mid = env->GetMethodID(cls, "<init>", "(Ljava/lang/String;)V");
@@ -2085,7 +2051,7 @@ static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 					}
 				}
 			}
-			if (checkException(env)) {
+			if (checkException(env) || mainclasspath == "") {
 				jvm->DetachCurrentThread();
 				continue;
 			}
@@ -2101,8 +2067,8 @@ static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 				{
 					// 获取平台路径和版本并装入main函数参数中进行启动
 					std::ifstream file;
-					wchar_t curDir[256]{ 0 };
-					GetModuleFileName(GetSelfModuleHandle(), curDir, 256);
+					wchar_t curDir[MAX_PATH]{ 0 };
+					GetModuleFileName(GetSelfModuleHandle(), curDir, MAX_PATH);
 					int len = (int)wcslen(curDir);
 					jstring dllname = env->NewString((const jchar*)curDir, len);
 					len = (int)wcslen(VERSION);
