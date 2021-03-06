@@ -67,6 +67,25 @@ static std::string JstringToUTF8(JNIEnv* env, jstring s) {
 	}
 	return str;
 }
+
+static std::wstring toGBKString(std::string s) {
+	int len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), (int)s.length(), NULL, 0);
+	WCHAR* w_str = new WCHAR[(size_t)len + 1]{ 0 };
+	MultiByteToWideChar(CP_ACP, 0, s.c_str(), (int)s.length(), w_str, len);
+	auto gbkstr = std::wstring(w_str);
+	delete[] w_str;
+	return gbkstr;
+}
+static std::string toUTF8String(std::wstring s) {
+	int iSize = WideCharToMultiByte(CP_ACP, 0, s.c_str(), -1, NULL, 0, NULL, NULL);
+	char* uc = new char[(size_t)(iSize) * 3 + 1]{ 0 };
+	WideCharToMultiByte(CP_ACP, 0, s.c_str(), -1, uc, iSize, NULL, NULL);
+	auto utf8str = std::string(uc);
+	delete[] uc;
+	return utf8str;
+}
+
+
 // 维度ID转换为中文字符
 static std::string toDimenStr(int dimensionId) {
 	switch (dimensionId) {
@@ -2010,16 +2029,14 @@ static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 		jars = jars + (f + TEXT(PATH_SEPARATOR));
 	}
 	jarpath = jarpath + jars;
-	int iSize = WideCharToMultiByte(CP_ACP, 0, jarpath.c_str(), -1, NULL, 0, NULL, NULL);
-	char *cjarpath = new char[(size_t)(iSize) * 3 + 1];
-	WideCharToMultiByte(CP_ACP, 0, jarpath.c_str(), -1, cjarpath, iSize, NULL, NULL);
-	options[0].optionString = cjarpath;
+	auto cjarpath = toUTF8String(jarpath);
+	options[0].optionString = (char*)cjarpath.c_str();
 	vm_args.version = JNI_VERSION_1_8;
 	vm_args.nOptions = 1;
 	vm_args.options = options;
 	auto CreateJavaVM = (jint(JNICALL*)(JavaVM**, void**, void*))pCreateJavaVM;
 	status = CreateJavaVM(&jvm, (void**)&env, &vm_args);
-	delete [] cjarpath;
+	//delete [] cjarpath;
 	if (status != JNI_ERR)
 	{
 		for (auto& jarName : paths) {
@@ -2091,14 +2108,20 @@ static void runJVM(std::vector<std::wstring>& paths, void* pCreateJavaVM) {
 	}
 }
 
+
+
 static void initJVMs() {
 	SetCurrentDirectoryA(getLocalPath().c_str());
-	std::string settingpath = "./javasetting.ini";	// 固定配置文件 - javasetting.ini
+	std::string plugins = "plugins/";
+	std::string settingdir = plugins + "settings/";				// 固定配置文件目录 - plugins/settings
+	std::string settingpath = settingdir + "javasetting.ini";	// 固定配置文件 - javasetting.ini
 	char jvmpath[MAX_PATH]{ 0 };
 	auto len = GetPrivateProfileStringA("JVM", "jvmpath", NULL, jvmpath, MAX_PATH, settingpath.c_str());
 	if (len < 1) {
 		PR(u8"[JR] 未能读取jvm配置文件，使用默认配置[详见" + settingpath + u8"]。通常jvm位于%JRE_PATH%\\bin\\server文件夹下。");
 		strcpy_s(jvmpath, "jvm.dll");		// 默认路径 - 假设环境变量Path中已包含jvm.dll
+		CreateDirectoryA(plugins.c_str(), 0);
+		CreateDirectoryA(settingdir.c_str(), 0);
 		WritePrivateProfileStringA("JVM", "jvmpath", "jvm.dll", settingpath.c_str());
 	}
 	char jardir[MAX_PATH]{ 0 };
@@ -2131,11 +2154,7 @@ static void initJVMs() {
 				if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				{
 					std::string fileName = std::string(jardir) + "\\" + ffd.cFileName;
-					int len = MultiByteToWideChar(CP_ACP, 0, fileName.c_str(), (int)fileName.length(), NULL, 0);
-					LPWSTR w_str = new WCHAR[(size_t)len + 1];
-					w_str[len] = L'\0';
-					MultiByteToWideChar(CP_ACP, 0, fileName.c_str(), (int)fileName.length(), w_str, len);
-					LPCWSTR jarName = w_str;
+					auto w_str = toGBKString(fileName);
 					paths.push_back(w_str);
 				}
 			} while (FindNextFileA(dfh, &ffd) != 0);
