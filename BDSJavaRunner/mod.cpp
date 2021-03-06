@@ -340,7 +340,7 @@ JNIEXPORT void JNICALL Java_BDS_MCJAVAAPI_JSErunScript
 		ev->GetJavaVM(&jvm);
 		jobject callb = !cb ? 0 : ev->NewGlobalRef(cb);
 		auto fn = [jvm, uc, callb]() {
-			std::string name = u8"CSR_tmpscript_" + std::to_string(getTmpJsId());
+			std::string name = u8"JR_tmpscript_" + std::to_string(getTmpJsId());
 			std::string rfcontent = u8"(function(){\n" + uc + u8"\n}())";
 			bool ret = SYMCALL(bool, MSSYM_MD5_23dc46771eb6a97b3d65e0e79a6fed42,	// ScriptApi::ScriptFramework::runScript
 				p_jsen, name, uc);
